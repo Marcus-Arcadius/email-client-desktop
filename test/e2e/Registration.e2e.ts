@@ -47,11 +47,11 @@ const registrationMock = RequestMock()
 
 fixture`Login Screen`
   .page('../../app/login_window/index.html')
-  .requestHooks(registrationMock)
-  .afterEach(assertNoConsoleErrors);
+  // .requestHooks(registrationMock)
+  // .afterEach(assertNoConsoleErrors);
 
 test('Go to registration', async t => {
   await t
-    .click('[data-tid="goto-registration"]')
-    .typeText(getInput('email'), 'tester');
+    .click('[data-tid="login-component-button-register"]')
+    .typeText('[data-tid="register-component-form-betacode"]', 'btester1');
 });

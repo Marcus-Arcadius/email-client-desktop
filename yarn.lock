@@ -15036,10 +15036,10 @@ test-exclude@^6.0.0:
     glob "^7.1.4"
     minimatch "^3.0.4"
 
-testcafe-browser-provider-electron@^0.0.14:
-  version "0.0.14"
-  resolved "https://registry.yarnpkg.com/testcafe-browser-provider-electron/-/testcafe-browser-provider-electron-0.0.14.tgz#093d4173084947858a255114f3442076b582b8a9"
-  integrity sha512-FcnOm1GMKPC0SWn5IFRitBJ6xSLWuLyzaZopZ+MH+Pp95hy4atVWbImDTJzTr4aHtPqs3GNdF1H7Ff2t7CmuNw==
+testcafe-browser-provider-electron@^0.0.16:
+  version "0.0.16"
+  resolved "https://registry.yarnpkg.com/testcafe-browser-provider-electron/-/testcafe-browser-provider-electron-0.0.16.tgz#cb4255b775bdec226ec76699f408a4aba20a8146"
+  integrity sha512-3qBIXdlV2gN0I3pLYbEdVlhe6rgfGdihaB6hc/339ZYVtpXE/AOt4CW+EubBJLG6gkwJI+39rv8azzQ6NebgKg==
   dependencies:
     babel-runtime "^6.25.0"
     chrome-remote-interface "^0.27.0"
@@ -15189,7 +15189,7 @@ testcafe-reporter-xunit@^2.1.0:
   resolved "https://registry.yarnpkg.com/testcafe-reporter-xunit/-/testcafe-reporter-xunit-2.1.0.tgz#e6d66c572ce15af266706af0fd610b2a841dd443"
   integrity sha1-5tZsVyzhWvJmcGrw/WELKoQd1EM=
 
-testcafe@^1.8.0:
+testcafe@^1.16.1:
   version "1.16.1"
   resolved "https://registry.yarnpkg.com/testcafe/-/testcafe-1.16.1.tgz#1757d09b5d28059be00ab10e6f214ff9b289e0a9"
   integrity sha512-efb4S7YIyu8BpG4dZQBCgPE3V1YWU8J32v7/cPr1zW1yY/9F2B0y1lMTpeFJ3rUMdHSZpwYi6y00dEfEnNeN/Q==

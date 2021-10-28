@@ -272,6 +272,7 @@ class Login extends Component<Props, State> {
           </Form>
           <Button
             className="select-none"
+            data-tid="login-component-button-register"
             disabled={loading}
             onClick={() => {
               onUpdateActive('register');

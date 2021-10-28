@@ -614,6 +614,7 @@ class Register extends Component<Props, State> {
                 <InputGroup className="w-full" inside>
                   <FormControl
                     name="betacode"
+                    data-tid="register-component-form-betacode"
                     onChange={this.onChangeBetaCode}
                   />
                   <InputGroup.Addon className="bg-transparent">
