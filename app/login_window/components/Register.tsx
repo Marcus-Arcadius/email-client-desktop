@@ -636,7 +636,7 @@ class Register extends Component<Props, State> {
                     {/* <BsCheck className="mr-1 text-gray-400" /> */}
                   </InputGroup.Addon>
                 </InputGroup>
-                <div style={errorStyles(formError.betacode)}>
+                <div data-tid="register-component-form-error-betacode" style={errorStyles(formError.betacode)}>
                   {formError.betacode}
                 </div>
               </FormGroup>
@@ -922,6 +922,7 @@ class Register extends Component<Props, State> {
               block
               onClick={() => this.handleNextStep(step + 1)}
               disabled={nextStepDisabled}
+              data-tid="register-component-button-next"
             >
               Next
             </Button>

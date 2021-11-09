@@ -1,7 +1,9 @@
 import { getIn } from 'immutable';
 import { Selector, RequestMock, RequestLogger } from 'testcafe';
+import i18n from '../../app/i18n/i18n';
+import { getSelector } from './helpers';
 
-const getInput = id => Selector('input').withAttribute('name', id);
+const getRegisterButton = id => Selector('input').withAttribute('name', id);
 
 const assertNoConsoleErrors = async t => {
   const { error } = await t.getBrowserConsoleMessages();
@@ -52,6 +54,25 @@ fixture`Login Screen`
 
 test('Go to registration', async t => {
   await t
-    .click('[data-tid="login-component-button-register"]')
-    .typeText('[data-tid="register-component-form-betacode"]', 'btester1');
+    .click(await getSelector('login-component-button-register'))
+    .expect((await getSelector('register-component-button-next')).exists).notOk();
+
+  await t
+    .typeText(await getSelector('register-component-form-betacode'), 'b');
+
+  await t
+    .expect((await getSelector('register-component-form-error-betacode')).textContent).contains('Invalid Beta Access Code.')
+    .expect((await getSelector('register-component-button-next')).exists).notOk();
+
+  await t
+    .click(await getSelector('register-component-form-betacode'))
+    .pressKey('delete')
+    .expect((await getSelector('register-component-form-error-betacode')).textContent).contains('Access Code Required to Register')
+    .expect((await getSelector('register-component-button-next')).exists).notOk();
+
+  await t
+    .typeText(await getSelector('register-component-form-betacode'), 'btester1')
+    .expect((await getSelector('register-component-button-next')).exists).ok()
+    .click(await getSelector('register-component-button-next'));
+
 });
