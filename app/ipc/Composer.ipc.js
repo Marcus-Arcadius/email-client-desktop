@@ -18,7 +18,10 @@ module.exports = windowManager => {
     return new Promise((resolve, reject) => {
       mainWindow.webContents.once('ipc-message', (e, channel, data) => {
         if (channel === 'ACCOUNT SERVICE::saveMessageToDBResponse') {
-          mainWindow.webContents.send('initMailbox', { fullSync: false });
+          const { sync = true } = payload;
+          mainWindow.webContents.send('IPC::initMailbox', {
+            fullSync: sync
+          });
           resolve(data);
         }
 
@@ -97,16 +100,33 @@ module.exports = windowManager => {
           const attachments = await Promise.all(
             fileNames.map(async filepath => {
               let content;
-              try {
-                content = await fs.readFileSync(filepath, {
-                  encoding: 'base64'
-                });
-              } catch (e) {
-                reject(e);
-              }
-
+              let size;
               let contentType;
               let extension;
+              let localPath;
+
+              try {
+                const stats = fs.statSync(filepath);
+                size = stats.size;
+              } catch (error) {
+                reject(
+                  new Error(`Could not calculate attachment size ${error}`)
+                );
+              }
+
+              // If file is great than 25mb then don't send file as base64 encoded content
+              if(size <= 25000000) {
+                try {
+                  content = await fs.readFileSync(filepath, {
+                    encoding: 'base64'
+                  });
+                } catch (e) {
+                  reject(e);
+                }
+              } else {
+                localPath = filepath;
+              }
+
               try {
                 // Filetype uses the first bytes from the file to determine type
                 const type = await FileType.fromFile(filepath);
@@ -122,18 +142,8 @@ module.exports = windowManager => {
                 reject(new Error(`Cannot get MIMETYPE ${error}`));
               }
 
-              let size;
-              try {
-                const stats = fs.statSync(filepath);
-                size = stats.size;
-              } catch (error) {
-                reject(
-                  new Error(`Could not calculate attachment size ${error}`)
-                );
-              }
-
               const filename = path.basename(filepath);
-              return { filename, content, contentType, size };
+              return { filename, content, contentType, size, localPath }
             })
           );
           resolve(attachments);
@@ -159,7 +169,7 @@ module.exports = windowManager => {
     });
   });
 
-  ipcMain.on('updateComposerDraft', async (event, email) => {
+  ipcMain.on('RENDERER::updateComposerDraft', async (event, email) => {
     const initialDraft = store.getInitialDraft();
 
     const newVal = {
@@ -198,14 +208,18 @@ module.exports = windowManager => {
 
   ipcMain.on('RENDERER::closeComposerWindow', async (event, opts) => {
     let action = null;
+    let reload = null;
 
     if (opts) {
       action = opts.action;
+      reload = opts.reloadDb !== undefined ? opts.reloadDb : true;
     }
 
     const mainWindow = windowManager.getWindow('mainWindow');
     const draft = store.getNewDraft();
     const isDirty = store.getDraftDirty();
+
+    // console.log('RENDERER::closeComposerWindow', action, draft, isDirty);
 
     if (isDirty && !action) {
       windowManager
@@ -217,7 +231,7 @@ module.exports = windowManager => {
 
           // Update draft
           if (res === 0) {
-            saveMessage({ messages: [draft], type: 'Draft', sync: true });
+            saveMessage({ messages: [draft], type: 'Draft', sync: reload });
           }
 
           return true;
@@ -226,12 +240,12 @@ module.exports = windowManager => {
           console.error(e);
         });
     } else if (isDirty && action === 'save') {
-      saveMessage({ messages: [draft], type: 'Draft', sync: true });
+      saveMessage({ messages: [draft], type: 'Draft', sync: reload });
     }
 
     clearDraft();
 
-    mainWindow.webContents.send('closeInlineComposer');
+    mainWindow.webContents.send('COMPOSER_IPC::closeInlineComposer');
   });
 
   ipcMain.handle('createContacts', async (event, payload) => {

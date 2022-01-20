@@ -1,8 +1,11 @@
 /* eslint-disable promise/no-nesting */
-import { updateFolderCount, updateAliasCount } from './mailbox/folders';
+import { updateFolderCount } from './mailbox/folders';
+
 import {
   aliasRegistrationSuccess,
-  fetchAliasMessages
+  fetchAliasMessages,
+  aliasSelection,
+  updateAliasCount
 } from './mailbox/aliases';
 import {
   Dispatch,
@@ -17,10 +20,17 @@ import {
   SelectionRange
 } from '../reducers/types';
 
-import { activeMessageId, selectAllFoldersById } from '../selectors/mail';
+import {
+  activeMessageId,
+  selectAllFoldersById,
+  currentMessageList
+} from '../selectors/mail';
 
 import Mail from '../../services/mail.service';
 import MessageIngress from '../../services/messageIngress.service';
+
+// ELECTRON IPC IMPORT
+const { ipcRenderer } = require('electron');
 
 // ASYNC REGISTER EMAIL ADDRESS WITH AWS SERVICES
 export const MAILBOX_REGISTRATION = 'MAILPAGE::MAILBOX_REGISTRATION';
@@ -221,14 +231,6 @@ export const fetchMailboxFolders = (id: number) => {
   };
 };
 
-export const CREATE_NEW_FOLDER = 'MAILPAGE::CREATE_NEW_FOLDER';
-export const createNewFolder = (folder: FolderType) => {
-  return {
-    type: CREATE_NEW_FOLDER,
-    folder
-  };
-};
-
 /*
  *  Get Mailboxes
  */
@@ -389,7 +391,7 @@ export const saveIncomingMessagesRequest = () => {
 
 export const SAVE_INCOMING_MESSAGES_SUCCESS =
   'MAILPAGE::SAVE_INCOMING_MESSAGES_SUCCESS';
-export const saveIncomingMessagesSuccess = function (
+export const saveIncomingMessagesSuccess = function(
   messages: MailMessageType[],
   activeFolderId: number,
   activeAliasId: string
@@ -424,9 +426,6 @@ export const saveIncomingMessages = (messages: any, newAliases: string[]) => {
     let folderCounts = {};
     const aliasCounts = {};
 
-    // console.log('::::::MESSAGES::::::', messages);
-    // console.log('::::::NEW ALIASES::::::', newAliases);
-
     if (newAliases.length) {
       // add new aliases to redux
       for (const alias of newAliases) {
@@ -456,12 +455,12 @@ export const saveIncomingMessages = (messages: any, newAliases: string[]) => {
 
     // Update Folder Counts
     for (const key in folderCounts) {
-      dispatch(updateFolderCount(parseInt(key), folderCounts[key]));
+      await dispatch(updateFolderCount(parseInt(key), folderCounts[key]));
     }
 
     // Update Alias Counts
     for (const key in aliasCounts) {
-      dispatch(updateAliasCount(key, aliasCounts[key]));
+      await dispatch(updateAliasCount(key, aliasCounts[key]));
     }
 
     return Promise.resolve('done');
@@ -480,10 +479,9 @@ export const fetchNewMessageRequest = () => {
 };
 
 export const FETCH_NEW_MESSAGE_SUCCESS = 'MAILPAGE::FETCH_NEW_MESSAGE_SUCCESS';
-export const fetchNewMessageSuccess = (messages: ExternalMailMessageType[]) => {
+export const fetchNewMessageSuccess = () => {
   return {
-    type: FETCH_NEW_MESSAGE_SUCCESS,
-    messages
+    type: FETCH_NEW_MESSAGE_SUCCESS
   };
 };
 
@@ -496,39 +494,26 @@ export const fetchNewMessageFailure = (error: string) => {
 };
 
 export function fetchNewMessages() {
-  return async (dispatch: Dispatch, getState: GetState) => {
-    const {
-      client,
-      globalState: { activeFolderIndex },
-      mail: {
-        folders: { byId, allIds: foldersArray }
-      }
-    } = getState();
-
+  return async (dispatch: Dispatch) => {
+    dispatch(fetchNewMessageRequest());
     let messages;
     try {
-      Mail.getNewMail()
-        .then(data => {
-          if (data.meta.length > 0) {
-            return MessageIngress.decipherMailMeta({
-              async: false,
-              meta: data.meta,
-              account: data.account
-            });
-          }
+      const data = await Mail.getNewMail();
 
-          return true;
-        })
-        .catch(err => {
-          return err;
+      if (data.meta.length > 0) {
+        await MessageIngress.decipherMailMeta({
+          async: false,
+          meta: data.meta,
+          account: data.account
         });
+      }
     } catch (err) {
       console.log(err);
       dispatch(fetchNewMessageFailure(err));
       return err;
     }
 
-    // dispatch(fetchNewMessageSuccess(messages));
+    dispatch(fetchNewMessageSuccess());
     return messages;
   };
 }
@@ -573,9 +558,9 @@ export const fetchMsg = (messageId: string) => {
 
       if (isUnread) {
         if (email.aliasId !== null) {
-          dispatch(updateAliasCount(email.aliasId, -1));
+          await dispatch(updateAliasCount(email.aliasId, -1));
         } else {
-          dispatch(updateFolderCount(email.folderId, -1));
+          await dispatch(updateFolderCount(email.folderId, -1));
         }
       }
     } catch (err) {
@@ -585,15 +570,6 @@ export const fetchMsg = (messageId: string) => {
 
     dispatch(fetchMsgBodySuccess(email));
     return Promise.resolve(email);
-  };
-};
-
-export const SHOW_MAXIMIZED_MESSAGE_DISPLAY =
-  'MESSAGES::SHOW_MAXIMIZED_MESSAGE_DISPLAY';
-export const showMaximizedMessageDisplay = (bool: boolean) => {
-  return {
-    type: SHOW_MAXIMIZED_MESSAGE_DISPLAY,
-    showMaximizedMessageDisplay: bool
   };
 };
 
@@ -633,14 +609,9 @@ export const msgSelectionFlowFailure = (error: Error) => {
   };
 };
 
-export const messageSelection = (message: MailMessageType, action: string) => {
+export const messageSelection = (message: MailMessageType) => {
   return async (dispatch: Dispatch, getState: GetState) => {
     dispatch(msgSelectionFlow(message.id, message.folderId));
-
-    if (action === 'showMaxDisplay') {
-      dispatch(showMaximizedMessageDisplay(true));
-    }
-
     try {
       const fullMsg = await dispatch(fetchMsg(message.id));
       dispatch(msgSelectionFlowSuccess(fullMsg, message.id, message.folderId));
@@ -698,7 +669,6 @@ export const folderSelectionFlowFailure = (error: Error) => {
 export const folderSelection = (folderIndex: number) => {
   return async (dispatch: Dispatch, getState: GetState) => {
     dispatch(folderSelectionFlow(folderIndex));
-    // dispatch(showMaximizedMessageDisplay(false));
 
     const { mail, globalState } = getState();
     const foldersArray = mail.folders.allIds;
@@ -772,7 +742,7 @@ export const fetchDataFailure = (error: Error) => {
   };
 };
 
-export const loadMailboxes = (opts: { fullSync: boolean }) => async (
+export const loadMailboxes = () => async (
   dispatch: Dispatch,
   getState: GetState
 ) => {
@@ -852,6 +822,7 @@ export const loadMailboxes = (opts: { fullSync: boolean }) => async (
   return { mailboxes, folders, messages, namespaces, aliases };
 };
 
+// ALL BELOW SHOULD BE PLACE IN THE global.ts actions file
 export const HIGHLIGHT_SEARCH_QUERY = 'GLOBAL::HIGHLIGHT_SEARCH_QUERY';
 export const setHighlightValue = (query: string) => {
   return {
@@ -860,20 +831,65 @@ export const setHighlightValue = (query: string) => {
   };
 };
 
-export const sync = (opts: { fullSync: boolean }) => {
-  return async (dispatch: Dispatch, getState: GetState) => {
-    console.time('Sync Mailboxes');
-
-    if (opts.fullSync) {
-      await dispatch(fetchNewMessages());
-    }
-
-    try {
-      await dispatch(loadMailboxes(opts));
-    } catch (error) {
-      return error;
-    }
-    console.timeEnd('Sync Mailboxes');
-    return true;
+export const SET_SEARCH_FILTER = 'GLOBAL::SET_SEARCH_FILTER';
+export const setSearchFilter = (payload: string[]) => {
+  return {
+    type: SET_SEARCH_FILTER,
+    payload
   };
 };
+
+export const CLEAR_SEARCH_FILTER = 'GLOBAL::CLEAR_SEARCH_FILTER';
+export const clearSearchFilter = () => {
+  return {
+    type: CLEAR_SEARCH_FILTER
+  };
+};
+
+export const selectSearch = (
+  payload: any,
+  msg: MailMessageType,
+  searchQuery: string
+): ((dispatch: Dispatch, getState: GetState) => Promise<void>) => {
+  return async (dispatch: Dispatch, getState: GetState) => {
+    const {
+      mail: {
+        folders: { allIds: foldersAllIds },
+        aliases: { allIds: aliasAllIds }
+      },
+      globalState: { editorIsOpen }
+    } = getState();
+
+    const isAlias = payload.aliasId !== null && payload.name !== 'Trash';
+    if (isAlias) {
+      const aliasIndex = aliasAllIds.indexOf(payload.aliasId);
+      await dispatch(aliasSelection(aliasIndex));
+    } else {
+      const folderIndex = foldersAllIds.indexOf(payload.folderId);
+      await dispatch(folderSelection(folderIndex));
+    }
+
+    dispatch(setSearchFilter(payload.messages));
+    await dispatch(setHighlightValue(searchQuery));
+
+    // If we actually select a specific message and not just a folder.
+    if (msg !== null) {
+      // const selected = {
+      //   startIdx: index,
+      //   endIdx: index,
+      //   exclude: [],
+      //   items: [message.id]
+      // };
+
+      if (editorIsOpen) {
+        ipcRenderer.send('RENDERER::closeComposerWindow', {
+          action: 'save',
+          reloadDb: true
+        });
+      }
+      dispatch(messageSelection(msg));
+      // dispatch(selectMessageRange(selected, message.folderId));
+    }
+  };
+};
+// END OF WHAT SHOULD BE MOVED TO OTHER FILE.

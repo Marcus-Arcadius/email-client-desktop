@@ -20,7 +20,7 @@ class MessageIngressService extends EventEmitter {
     this.newAliases = [];
     this.retryQueue = [];
     this.account = null;
-    this.MAX_RETRY = 3;
+    this.MAX_RETRY = 1;
     this.folderCounts = {};
 
     mainWorker.on('newMessage', async m => {
@@ -39,29 +39,47 @@ class MessageIngressService extends EventEmitter {
       if (!error) {
         const email = transformEmail(data);
 
+        if (data._id) {
+          this.syncIds.push(data._id);
+        }
+
         MailService.save({
           messages: [email],
           type: 'Incoming',
-          async: true
+          async: false
         })
-          .then(msg => {
-            this.incomingMsgBatch = [...msg.msgArr, ...this.incomingMsgBatch];
-
-            if (msg.newAliases.length > 0) {
-              this.newAliases = [...msg.newAliases, ...this.newAliases];
-            }
-
-            if (data._id) {
-              this.syncIds.push(data._id);
-            }
-
-            this.finished += 1;
-            this.handleDone();
-            return 'Message Saved';
-          })
-          .catch(errors => console.log(errors));
       }
     });
+
+    mainWorker.on('MAILBOX_WORKER::saveMessageToDB', async m => {
+      
+      const { data, error } = m;
+
+      if(error) {
+        console.log('MessageIngess.service::saveMessageToDBError', error);
+
+        this.finished += 1;
+        this.handleDone();
+        return;
+      }
+
+      data.msgArr.forEach(msg => {
+        if(!this.incomingMsgBatch.some(item => item.id === msg.id)) {
+          this.incomingMsgBatch.push(msg);
+        }
+      })
+
+      if (data.newAliases.length > 0) {
+        data.newAliases.forEach(alias => {
+          if(!this.newAliases.some(a => a.name === alias.name))  {
+            this.newAliases.push(alias)
+          }
+        })
+      }
+
+      this.finished += 1;
+      this.handleDone();
+    })
 
     mainWorker.on('fetchError', async m => {
       const { data } = m;
@@ -77,7 +95,6 @@ class MessageIngressService extends EventEmitter {
         console.log(`File ${data.file.hash} failed all attempts!`);
 
         // Goes into drive's dead letter queue
-
         this.finished += 1;
         this.handleDone();
       }
@@ -94,10 +111,10 @@ class MessageIngressService extends EventEmitter {
       this.finished = 0;
       this.msgBatchSize = meta.length;
 
-      this.emit('messageSyncStarted', meta.length);
+      this.emit('MESSAGE_INGRESS_SERVICE::messageSyncStarted', meta.length);
 
       mainWorker.send({
-        event: 'newMessageBatch',
+        event: 'MESSAGE_INGRESS_SERVICE::newMessageBatch',
         payload: { meta, account }
       });
     }
@@ -125,7 +142,7 @@ class MessageIngressService extends EventEmitter {
     }
 
     if (this.finished < this.msgBatchSize) {
-      this.emit('messageSynced', {
+      this.emit('MESSAGE_INGRESS_SERVICE::messageSynced', {
         index: this.finished,
         total: this.msgBatchSize,
         done: false
@@ -138,7 +155,7 @@ class MessageIngressService extends EventEmitter {
         this.syncIds = [];
       }
 
-      this.emit('messageSynced', {
+      this.emit('MESSAGE_INGRESS_SERVICE::messageSynced', {
         index: this.finished,
         total: this.msgBatchSize,
         messages: this.incomingMsgBatch,

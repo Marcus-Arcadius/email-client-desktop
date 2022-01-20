@@ -1,29 +1,72 @@
 const { ipcRenderer } = require('electron');
 const MailService = require('./mail.service');
 const ContactService = require('./contact.service');
-const fileUtil = require('../utils/file.util');
+const FileService = require('./file.service');
+const { v4: uuidv4 } = require('uuid');
 
 class ComposerService {
   static async send(email, isInline) {
     let details;
+    let eml = { ...email }
+    let _attachments = [];
+    let totalAttachmentSize = 0;
+
+    // Save individual attachments
+    if(eml.attachments && eml.attachments.length) {
+
+      for(let attachment of eml.attachments) {
+        await new Promise((resolve, reject) => {
+          try {
+            totalAttachmentSize += attachment.size;
+            
+            // Don't send file data if size is over 25mb
+            if(totalAttachmentSize > 25000000) {
+              FileService.saveFileToDrive(attachment).then(file => {
+                console.log('DONE SAVING FILE TO DRIVE', file)
+
+                _attachments.push({
+                  filename: attachment.filename,
+                  contentType: file.contentType || file.mimetype,
+                  size: file.size,
+                  discoveryKey: file.discovery_key,
+                  hash: file.hash,
+                  path: file.path,
+                  header: file.header,
+                  key: file.key
+                })
+
+                resolve();
+              }).catch(e => {
+                console.error(e);
+                reject(e);
+              })
+            } else {
+              _attachments.push(attachment);
+              resolve();
+            }
+            
+          } catch(e) {
+            console.error(e);
+            reject(e)
+          }
+        })
+      }
+
+      eml.attachments = _attachments;
+    }
 
     if (isInline) {
-      details = await MailService.send(email);
+      details = await MailService.send(eml);
     } else {
-      details = await ComposerService.sendEmail(email);
+      details = await ComposerService.sendEmail(eml);
     }
 
-    // Decode base64 attachments before saving
-    for(let i = 0; i < email.attachments.length; i += 1 ) {
-      email.attachments[i].content = fileUtil.decodeB64(email.attachments[i].content);
-    }
+    eml.path = details.path;
+    eml.encKey = details.key;
+    eml.encHeader = details.header;
 
-    email.path = details.path;
-    email.encKey = details.key;
-    email.encHeader = details.header;
-
-    ComposerService.save(email, 'Sent', isInline);
-    ComposerService.createContacts(email, isInline);
+    ComposerService.save(eml, isInline);
+    ComposerService.createContacts(eml, isInline);
   }
 
   static async sendEmail(email) {
@@ -40,9 +83,9 @@ class ComposerService {
     });
   }
 
-  static async save(email, type, isInline, mailProps) {
+  static async save(email, isInline, mailProps) {
     if (isInline) {
-      await MailService.save({ messages: [email], type, sync: true });
+      await MailService.save({ messages: [email], type: 'Sent', sync: true });
     } else {
       ipcRenderer
         .invoke('COMPOSER SERVICE::saveMessageToDB', {

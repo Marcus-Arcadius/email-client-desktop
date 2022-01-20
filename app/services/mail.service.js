@@ -1,4 +1,5 @@
-const { dialog } = require('electron').remote;
+const { dialog, app } = require('electron').remote;
+const path = require('path');
 const worker = require('../workers/main.worker');
 const Login = require('./login.service');
 
@@ -49,10 +50,10 @@ class MailService {
 
   // Send new emails
   static send(email) {
-    worker.send({ event: 'sendEmail', payload: { email } });
+    worker.send({ event: 'MAILBOX_SERVICE::sendEmail', payload: { email } });
 
     return new Promise((resolve, reject) => {
-      worker.once('sendEmail', m => {
+      worker.once('MAILBOX_WORKER::sendEmail', m => {
         const { data, error } = m;
 
         if (error) return reject(error);
@@ -100,7 +101,10 @@ class MailService {
       options = {
         title: 'Select Path',
         buttonLabel: 'Save Attachment',
-        defaultPath: attachments[0].filename,
+        defaultPath: path.join(
+          app.getPath('downloads'),
+          attachments[0].filename
+        ),
         properties: ['showOverwriteConfirmation', 'createDirectory']
       };
     } else {
@@ -128,13 +132,16 @@ class MailService {
 
   static save(opts) {
     worker.send({
-      event: 'MAIL SERVICE::saveMessageToDB',
+      event:
+        opts.type === 'Sent'
+          ? 'MAIL SERVICE::SaveSentMessageToDB'
+          : 'MAIL SERVICE::saveMessageToDB',
       payload: { messages: opts.messages, type: opts.type }
     });
 
     if (opts.async) {
       return new Promise((resolve, reject) => {
-        worker.once('MAILBOX WORKER::saveMessageToDB', m => {
+        worker.once('MAILBOX_WORKER::saveMessageToDB', m => {
           const { data, error } = m;
 
           if (error) return reject(error);
@@ -434,10 +441,13 @@ class MailService {
   }
 
   static search(searchQuery) {
-    worker.send({ event: 'searchMailbox', payload: { searchQuery } });
+    worker.send({
+      event: 'MAIL_SERVICE::searchMailbox',
+      payload: { searchQuery }
+    });
 
     return new Promise((resolve, reject) => {
-      worker.once('searchMailbox', m => {
+      worker.once('MAILBOX_WORKER::searchMailbox', m => {
         const { data, error } = m;
 
         if (error) return reject(error);

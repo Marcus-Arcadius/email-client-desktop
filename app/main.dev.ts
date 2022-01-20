@@ -68,6 +68,8 @@ const createMainWindow = async () => {
       show: false,
       width: 1240,
       height: 735,
+      minWidth: 1150,
+      minHeight: 650,
       resizable: true,
       frame: false,
       backgroundColor: '#FFF',
@@ -130,6 +132,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('will-quit', e => {
+  process.exit(0);
 });
 
 app.on('ready', async () => {

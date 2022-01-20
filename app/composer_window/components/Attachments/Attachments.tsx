@@ -6,7 +6,7 @@ import AttachmentPreview from './AttachmentPreview';
 
 import ComposerService from '../../../services/composer.service';
 import { AttachmentType } from '../../../main_window/reducers/types';
-import styles from './Attachments.less';
+import styles from './Attachments.css';
 
 const mime = require('mime-types');
 const path = require('path');
@@ -36,9 +36,11 @@ const AttachmentItem = ({
     key={`${item.filename}`}
     className="flex px-2 flex-row items-center group cursor-pointer pt-4 w-auto"
   >
-    <AttachmentPreview attachment={item} key={item.filename}/>
+    <AttachmentPreview attachment={item} key={item.filename} />
     <div className="pl-4 pr-2 flex flex-col">
-      <div className="text-sm font-medium text-gray-600">{item.filename}</div>
+      <div className="text-sm font-medium text-gray-600 w-40 overflow-ellipsis overflow-hidden">
+        {item.filename}
+      </div>
       <div>
         <span className="text-gray-400 px-1 text-sm">&#9679; </span>
         {item.readableSize}
@@ -67,7 +69,7 @@ const AttachmentItem = ({
   </li>
 );
 
-export default function Attachments(props: Props) {
+const Attachments = (props: Props) => {
   const { attachments = [], onAttachmentChange, displayStatus } = props;
   let attClone = [];
 
@@ -78,11 +80,11 @@ export default function Attachments(props: Props) {
   }
 
   const attachmentsTransform = attClone.map(a => {
-    const extension = mime.extension(a.mimetype);
-    const readableSize = humanFileSize(a.size, true, 2);
-    const filename = path.basename(a.filename);
+      const extension = mime.extension(a.mimetype);
+      const readableSize = humanFileSize(a.size, true, 2);
+      const filename = path.basename(a.filename);
 
-    return Object.assign(a, { extension, readableSize, filename });
+      return Object.assign(a, { extension, readableSize, filename });
   });
 
   const deleteItem = (index: number) => {
@@ -168,3 +170,5 @@ export default function Attachments(props: Props) {
 Attachments.defaultProps = {
   onAttachmentChange: (newArray: AttachmentType[]) => {}
 };
+
+export default Attachments;

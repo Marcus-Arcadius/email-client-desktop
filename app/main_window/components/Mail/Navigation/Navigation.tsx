@@ -2,6 +2,7 @@
 /* eslint-disable jsx-a11y/no-noninteractive-element-interactions */
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { ipcRenderer } from 'electron';
 
 // IMPORT EXTERNAL LIBRAIRIES
 import { Button, Dropdown, Icon } from 'rsuite';
@@ -12,16 +13,10 @@ import { useDrop } from 'react-dnd';
 import {
   EditSquare,
   Edit,
-  Send,
-  Danger,
   Delete,
   Plus,
   ChevronDown,
-  MoreSquare,
-  Star,
-  TickSquare,
-  Message,
-  Bookmark
+  MoreSquare
 } from 'react-iconly';
 
 // COMPONENT IMPORT
@@ -29,7 +24,7 @@ import NewFolderModal from './NewFolderModal';
 import AliasSection from './Aliases/AliasSection';
 
 // CSS/LESS STYLES
-import styles from './Navigation.less';
+import styles from './Navigation.css';
 
 // INTERNATIONALIZATION
 import i18n from '../../../../i18n/i18n';
@@ -43,13 +38,17 @@ import {
 } from '../../../selectors/mail';
 
 // REDUX ACTION CREATORS
-import { folderSelection, createNewFolder } from '../../../actions/mail';
+import { folderSelection } from '../../../actions/mail';
+import { createNewFolder } from '../../../actions/mailbox/folders';
 import { aliasSelection } from '../../../actions/mailbox/aliases';
 import { clearActiveMessage } from '../../../actions/mailbox/messages';
 import { toggleEditor } from '../../../actions/global';
 
 // TYPESCRIPT TYPES
 import { StateType, FolderType } from '../../../reducers/types';
+
+// NAV ICON DICTIONNARY
+import CustomIcon from './NavIcons';
 
 type Props = {
   onRefreshData: () => void;
@@ -62,20 +61,14 @@ export default function Navigation(props: Props) {
   // const history = useHistory();
   const dispatch = useDispatch();
 
-  // Dictionary of Icon Components used in this function
-  const CustomIcon = {
-    new: Star,
-    inbox: Message,
-    pencil: Edit,
-    'send-o': Send,
-    'trash-o': Delete,
-    'folder-o': Bookmark,
-    ban: Danger
-  };
-
   const newMessageAction = async () => {
     await dispatch(clearActiveMessage(folderId));
     dispatch(toggleEditor('brandNewComposer', true));
+    await ipcRenderer.invoke('RENDERER::ingestDraftForInlineComposer', {
+      mailbox,
+      message: {},
+      editorAction: 'new'
+    });
   };
 
   const [showFolderModal, setShowFolderModal] = useState(false);

@@ -6,7 +6,7 @@ import WavyHeader from '../components/designElements/WavyHeader';
 import WavyFooter from '../components/designElements/WavyFooter';
 import FirstTimeScreen from '../components/FirstTimeScreen';
 import PasswordTile from '../components/PasswordTile';
-import styles from './LoginPage.less';
+import styles from './LoginPage.css';
 
 const themeUtils = require('../../utils/themes.util');
 const LoginService = require('../../services/login.service');
@@ -69,9 +69,10 @@ class LoginPage extends Component<Props, State> {
 
     return (
       <div
-        className={`absolute w-full h-full flex flex-col overflow-hidden ${styles.container}`}
+        className={`absolute w-full h-full flex flex-col overflow-hidden`}
       >
         <div className="h-full w-full">
+          <div className={`absolute h-16 w-full ${styles.drag}`} />
           {activeWindow === 'first-screen' && (
             <FirstTimeScreen
               isLoading={isLoading}

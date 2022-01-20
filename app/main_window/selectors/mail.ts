@@ -35,7 +35,7 @@ export const selectDisplayFolders = createSelector(
   }
 );
 
-const activeFolderIndex = (state: StateType) =>
+export const activeFolderIndex = (state: StateType) =>
   state.globalState.activeFolderIndex;
 
 export const activeFolderId = createSelector(
@@ -89,7 +89,7 @@ export const activeMessageSelectedRange = createSelector(
 export const activeMessageObject = createSelector(
   [selectAllMessages, activeMessageId],
   (messages, activeMsgId) => {
-    return messages.byId[activeMsgId] || { id: null };
+    return messages.byId[activeMsgId] || { id: null, emailId: null };
   }
 );
 
@@ -130,7 +130,9 @@ export const activeAliasId = createSelector(
 export const selectActiveAliasName = createSelector(
   [selectAllAliases, activeAliasId],
   (aliases, activeAlias) => {
-    return activeAliasId !== null && aliases.byId[activeAlias] ? aliases.byId[activeAlias].name : '';
+    return activeAliasId !== null && aliases.byId[activeAlias]
+      ? aliases.byId[activeAlias].name
+      : '';
   }
 );
 
@@ -141,16 +143,71 @@ export const aliasFolderIndex = createSelector([selectAllFolders], folders => {
   return folders.allIds.indexOf(0);
 });
 
+export const searchFilteredMessages = (state: StateType) =>
+  state.globalState.searchFilteredMsg;
+
+export const messageListFilters = (state: StateType) =>
+  state.globalState.msgListFilters;
+
+export const readFilter = createSelector(
+  [messageListFilters, activeAliasId, activeFolderId],
+  (filterObj, aliasId, folderId) => {
+    const id = aliasId !== null ? aliasId : folderId;
+
+    if (id in filterObj) {
+      const filters = filterObj[id];
+
+      if ('unread' in filters) {
+        return filters.unread === 0 ? 'read' : 'unread';
+      }
+
+      return 'all';
+    }
+
+    return 'all';
+  }
+);
+
 export const currentMessageList = createSelector(
-  [selectAllMessages, activeAliasId, activeFolderId],
-  (rootMessages, aliasId, folderId) => {
+  [
+    selectAllMessages,
+    activeAliasId,
+    activeFolderId,
+    searchFilteredMessages,
+    readFilter,
+    selectAllFoldersById
+  ],
+  (rootMessages, aliasId, folderId, filter, readCondition, allFoldersById) => {
     const { byId, allIds } = rootMessages;
     const filteredArr = allIds.filter(
-      m => byId[m].folderId === folderId && byId[m].aliasId === aliasId
+      id =>
+        (byId[id].folderId === folderId && byId[id].aliasId === aliasId) ||
+        ['Archives', 'Trash'].includes(allFoldersById[byId[id].folderId].name)
     );
 
+    let finalArray;
+
+    if (filter.length > 0) {
+      finalArray = filteredArr.filter(id => filter.includes(id));
+    } else {
+      switch (readCondition) {
+        case 'unread':
+          finalArray = [...filteredArr.filter(id => byId[id].unread)];
+          break;
+
+        case 'read':
+          finalArray = [...filteredArr.filter(id => !byId[id].unread)];
+          break;
+
+        case 'all':
+        default:
+          finalArray = [...filteredArr];
+          break;
+      }
+    }
+
     const newByIds = {};
-    filteredArr.forEach(m => {
+    finalArray.forEach(m => {
       newByIds[m] = {
         ...byId[m]
       };
@@ -159,7 +216,7 @@ export const currentMessageList = createSelector(
     return {
       loading: rootMessages.loading,
       byId: newByIds,
-      allIds: [...filteredArr]
+      allIds: [...finalArray]
     };
   }
 );

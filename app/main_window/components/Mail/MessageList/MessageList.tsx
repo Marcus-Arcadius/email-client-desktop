@@ -23,6 +23,8 @@ import {
   fetchMoreFolderMessages
 } from '../../../actions/mail';
 
+import { setMsgListFilter } from '../../../actions/global';
+
 import { fetchMoreAliasMessages } from '../../../actions/mailbox/aliases';
 
 import {
@@ -40,7 +42,9 @@ import {
   activeMessageSelectedRange,
   activeFolderId,
   activeAliasId,
-  selectActiveAliasName
+  selectActiveAliasName,
+  searchFilteredMessages,
+  readFilter as msgFilter
 } from '../../../selectors/mail';
 
 // TS TYPES
@@ -66,14 +70,19 @@ export default function MessageList(props: Props) {
   const activeSelectedRange = useSelector(activeMessageSelectedRange);
   const folderId = useSelector(activeFolderId);
   const aliasId = useSelector(activeAliasId);
+  const searchFilter = useSelector(searchFilteredMessages);
+  const readFilter = useSelector(msgFilter);
+
   const { editorIsOpen } = useSelector(selectGlobalState);
+
+  // console.log('READFILTER', readFilter);
 
   const virtualLoaderRef = useRef(null);
 
   let isLoading = false;
 
   const selectMessage = (message: MailMessageType) => {
-    return dispatch(messageSelection(message, ''));
+    return dispatch(messageSelection(message));
   };
 
   const selectMessageRange = async (
@@ -162,7 +171,13 @@ export default function MessageList(props: Props) {
     };
 
     if (editorIsOpen) {
-      ipcRenderer.send('RENDERER::closeComposerWindow', { action: 'save' });
+      const opts = { action: 'save', reloadDb: false };
+
+      if (currentFolderName === 'Drafts') {
+        opts.reloadDb = true;
+      }
+      console.log('MESSAGELIST', opts);
+      ipcRenderer.send('RENDERER::closeComposerWindow', opts);
     }
 
     // If the editor is Open or if the message selected is not already the one open
@@ -297,19 +312,83 @@ export default function MessageList(props: Props) {
     }
   };
 
+  const setReadFilter = (status: string) => {
+    switch (status) {
+      case 'read':
+        dispatch(setMsgListFilter({ unread: 0 }, folderId, aliasId));
+        break;
+
+      case 'unread':
+        dispatch(setMsgListFilter({ unread: 1 }, folderId, aliasId));
+        break;
+
+      case 'all':
+        dispatch(setMsgListFilter({}, folderId, aliasId));
+        break;
+
+      default:
+        break;
+    }
+  };
+
   return (
     <div className="flex-1 flex w-full flex-col rounded-t-lg bg-white mr-2 border border-gray-200 shadow">
-      <div className="w-full text-lg font-semibold py-2 pl-4 pr-2 mb-2 text-gray-600 flex flex-row justify-between">
-        <div className="flex-1 select-none">
-          {currentAliasName || currentFolderName || ''}
-          <div className="h-0.5 w-6 rounded-lg bg-gradient-to-r from-purple-700 to-purple-500 " />
+      <div className="w-full py-2 pl-4 pr-2 mb-2 flex flex-row justify-between">
+        <div className="flex-1 flex select-none flex-row text-gray-600">
+          <div className="flex flex-col text-lg font-semibold">
+            {currentAliasName || currentFolderName || ''}
+            <div className="h-0.5 w-6 rounded-lg bg-gradient-to-r from-purple-700 to-purple-500 " />
+          </div>
+          {searchFilter.length > 0 && (
+            <div className="flex items-center ml-2 ">
+              <span className="text-xs text-coolGray-400">( search )</span>
+            </div>
+          )}
         </div>
         <div className="items-end flex">
-          {/* <div className="flex flex-row text-xs rounded px-2 py-1 text-gray-300 content-center">
-            <div className="px-2 py-1 bg-gray-100 text-gray-400 rounded shadow mr-2">Unread</div>
-            <div className="px-2 py-1 mr-2">Read</div>
-            <div className="px-2 py-1">All</div>
-          </div> */}
+          {![2, 3, 4].includes(folderId) && searchFilter.length === 0 && (
+            <div className="flex flex-row text-xs rounded px-2 py-1 text-gray-300 content-center select-none">
+              <div
+                className={`px-2 py-1 mr-2 outline-none ${
+                  readFilter === 'unread'
+                    ? 'bg-gray-100 text-gray-400 rounded shadow'
+                    : ''
+                }`}
+                tabIndex={0}
+                role="button"
+                onClick={() => setReadFilter('unread')}
+                style={{ cursor: 'pointer' }}
+              >
+                Unread
+              </div>
+              <div
+                className={`px-2 py-1 mr-2 outline-none ${
+                  readFilter === 'read'
+                    ? 'bg-gray-100 text-gray-400 rounded shadow'
+                    : ''
+                }`}
+                tabIndex={0}
+                role="button"
+                onClick={() => setReadFilter('read')}
+                style={{ cursor: 'pointer' }}
+              >
+                Read
+              </div>
+              <div
+                className={`px-2 py-1 outline-none ${
+                  readFilter === 'all'
+                    ? 'bg-gray-100 text-gray-400 rounded shadow'
+                    : ''
+                }`}
+                tabIndex={0}
+                role="button"
+                onClick={() => setReadFilter('all')}
+                style={{ cursor: 'pointer' }}
+              >
+                All
+              </div>
+            </div>
+          )}
           {/* <div style={{ cursor: 'pointer' }} onClick={toggleSort}>
             <SortIcon color="#9333ea" order={sort} />
           </div> */}

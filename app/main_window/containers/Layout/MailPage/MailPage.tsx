@@ -6,13 +6,13 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 
 // REDUX ACTIONS
-import { sync } from '../../../actions/mail';
+import { fetchNewMessages, loadMailboxes } from '../../../actions/mail';
 
 import { clearActiveMessage } from '../../../actions/mailbox/messages';
 import { toggleEditor } from '../../../actions/global';
 
 // Selectors
-import { activeFolderId } from '../../../selectors/mail';
+import { activeFolderId, selectActiveMailbox } from '../../../selectors/mail';
 
 // Components IMPORTS
 import MessageList from '../../../components/Mail/MessageList/MessageList';
@@ -28,32 +28,37 @@ export default function MailPage() {
   const dispatch = useDispatch();
 
   const folderId = useSelector(activeFolderId);
+  const mailbox = useSelector(selectActiveMailbox);
 
   const [loading, setLoading] = useState(false);
   const [panelWidths, setPanelWidths] = useState({ nav: 200, msgList: 445 });
   const [isSyncInProgress, setIsSyncInProgress] = useState(false);
 
+  const toggleEditorState = (editorAction: string, forcedStatus?: boolean) => {
+    dispatch(toggleEditor(editorAction, forcedStatus));
+  };
+
   useEffect(() => {
-    ipcRenderer.on('initMailbox', async (event, opts) => {
-      await syncMail(opts);
+    ipcRenderer.on('IPC::initMailbox', async (event, opts) => {
+      const { fullSync = true } = opts;
+
+      // We don't always want the full state of the app to be refreshed
+      if (fullSync) {
+        await dispatch(loadMailboxes(opts));
+        await dispatch(fetchNewMessages());
+      }
     });
 
-    ipcRenderer.on('closeInlineComposer', async event => {
+    ipcRenderer.on('COMPOSER_IPC::closeInlineComposer', async event => {
       toggleEditorState('closeInlineComposer', false);
     });
 
     return () => {
       ipcRenderer.removeAllListeners('realTimeDelivery');
+      ipcRenderer.removeAllListeners('IPC::initMailbox');
+      ipcRenderer.removeAllListeners('COMPOSER_IPC::closeInlineComposer');
     };
   }, []);
-
-  const syncMail = async (opts: { fullSync: boolean }) => {
-    await dispatch(sync(opts));
-  };
-
-  const toggleEditorState = (editorAction: string, forcedStatus?: boolean) => {
-    dispatch(toggleEditor(editorAction, forcedStatus));
-  };
 
   const clearSelectedMessage = async (folderId: number) => {
     dispatch(clearActiveMessage(folderId));
@@ -81,8 +86,6 @@ export default function MailPage() {
   };
 
   const handleInlineComposerMaximize = async () => {
-    const { mailbox, toggleEditorState } = this.props;
-    // this.setState({ showComposerInline: false });
     toggleEditorState('composerMaximize', false);
     await ipcRenderer.invoke('RENDERER::showComposerWindow', {
       mailbox,
@@ -98,8 +101,9 @@ export default function MailPage() {
   // REFRESHING THE STATE OF THE MAIL PAGE
   const refresh = async (full: any) => {
     setLoading(true);
-    await syncMail({ fullSync: !isSyncInProgress || full });
-
+    if (!isSyncInProgress) {
+      await dispatch(fetchNewMessages());
+    }
     setTimeout(() => setLoading(false), 1000);
   };
 
@@ -108,7 +112,8 @@ export default function MailPage() {
       <PanelGroup
         spacing={0}
         onResizeEnd={(panels: [{ size: number }, { size: number }]) =>
-          handlePanelResizeEnd(panels, 'nav')}
+          handlePanelResizeEnd(panels, 'nav')
+        }
         panelWidths={[
           {
             size: panelWidths.nav,
@@ -116,7 +121,7 @@ export default function MailPage() {
             maxSize: 300,
             resize: 'dynamic'
           },
-          { minSize: 250, resize: 'stretch' }
+          { resize: 'stretch' }
         ]}
       >
         <div className="w-full">
@@ -139,7 +144,7 @@ export default function MailPage() {
             spacing={0}
             panelWidths={[
               { size: panelWidths.msgList, minSize: 330, resize: 'dynamic' },
-              { minSize: 200, resize: 'dynamic' }
+              { minSize: 250, resize: 'dynamic' }
             ]}
           >
             <MessageList />
@@ -154,7 +159,7 @@ export default function MailPage() {
       </PanelGroup>
       <MessageSyncNotifier
         onRefresh={() => {
-          syncMail({ fullSync: false });
+          refresh(true);
         }}
         inProgress={toggleSyncInProgress}
       />

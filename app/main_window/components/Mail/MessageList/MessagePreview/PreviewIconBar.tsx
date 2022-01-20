@@ -37,7 +37,7 @@ function PreviewIconBar(props: Props) {
     // NEED TO REWRITE THIS USING REDUX PATTERNS
     await Mail.removeMessages(messageTodelete);
     await dispatch(clearActiveMessage(activeFolderId));
-    dispatch(loadMailboxes({ fullSync: false }));
+    dispatch(loadMailboxes());
   };
 
   // Handles Selection Movements including routing deletes
@@ -95,7 +95,7 @@ function PreviewIconBar(props: Props) {
               set="broken"
               style={{ width: '1.25em', height: '1.25em', cursor: 'pointer' }}
               className="ml-0.5 text-trueGray-500 hover:text-trueGray-700"
-              onClick={() => moveToFolder(5, 'Trash')}
+              onClick={() => moveToFolder(4, 'Trash')}
             />
           </Whisper>
         </>

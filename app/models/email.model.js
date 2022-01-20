@@ -2,10 +2,10 @@
 const Sequelize = require('sequelize');
 const removeMd = require('remove-markdown');
 const { Model } = require('sequelize');
+const { v4: uuidv4 } = require('uuid');
 const { File } = require('./file.model.js');
 const { Folder } = require('./folder.model');
 const fileUtil = require('../utils/file.util');
-const { v4: uuidv4 } = require('uuid');
 const store = require('../Store');
 
 const model = {
@@ -61,7 +61,7 @@ const model = {
   updatedAt: Sequelize.DATE
 };
 
-class Email extends Model { }
+class Email extends Model {}
 
 module.exports.Email = Email;
 
@@ -76,14 +76,18 @@ module.exports.init = async (sequelize, opts) => {
   });
 
   const drive = store.getDrive();
-  const collection = await drive.collection('Email');
+  const collection = await drive.db.collection('Email');
 
   Email.addHook('afterFind', async (email, options) => {
     process.send({ event: 'findEmail', email });
 
     try {
       if (!Array.isArray(email) && options.attributes.includes('bodyAsHtml')) {
-        const content = await fileUtil.readFile(email.path, { drive, type: 'email' });
+        const content = await fileUtil.readFile(email.path, {
+          drive,
+          type: 'email'
+        });
+
         const e = JSON.parse(content);
 
         email.bodyAsHtml = e.bodyAsHtml || e.html_body || e.bodyAsText;
@@ -96,14 +100,6 @@ module.exports.init = async (sequelize, opts) => {
           bodyAsText = bodyAsText.replace(/(?:\u00a0|\u200C)/g, '');
 
           email[i].bodyAsText = bodyAsText;
-
-          // const selection = bodyAsText.split(' ').slice(0, 20);
-
-          // if (selection[selection.length - 1] !== '...') {
-          //   selection.push('...');
-          // }
-
-          // email[i].bodyAsText = selection.join(' ');
         }
       }
     } catch (err) {
@@ -123,21 +119,24 @@ module.exports.init = async (sequelize, opts) => {
         email.path = `/email/${uuidv4()}.json`;
       }
 
-      // Save email to drive
-      await fileUtil.saveEmailToDrive({ email, drive });
+      if(typeof email.attachments === 'object') {
+        email.attachments = JSON.stringify(email.attachments);
+      }
+
       email.bodyAsHtml = null;
 
-      await collection.put(email.emailId,
-        {
-          unread: email.unread ? 1 : 0,
-          folderId: email.folderId,
-          path: email.path
-        }
-      );
+      await collection.put(email.emailId, {
+        unread: email.unread ? 1 : 0,
+        folderId: email.folderId,
+        path: email.path
+      });
 
       process.send({ event: 'BeforeCreate-saveMessageToDBLOG', data: email });
     } catch (err) {
-      process.send({ event: 'BeforeCreate-saveMessageToDBLOG', error: err.message });
+      process.send({
+        event: 'BeforeCreate-saveMessageToDBLOG',
+        error: err.message
+      });
       throw new Error(err);
     }
   });
@@ -147,20 +146,18 @@ module.exports.init = async (sequelize, opts) => {
       email.bodyAsText = removeMd(email.bodyAsText);
       email.bodyAsText = email.bodyAsText.replace(/\[(.*?)\]/g, '');
       email.bodyAsText = email.bodyAsText.replace(/(?:\u00a0|\u200C)/g, '');
-      email.bodyAsHtml = null;
 
-      await collection.put(email.emailId,
-        {
-          unread: email.unread,
-          folderId: email.folderId,
-          path: email.path
-        }
-      );
+      await collection.put(email.emailId, {
+        unread: email.unread,
+        folderId: email.folderId,
+        path: email.path
+      });
 
       process.send({ event: 'BeforeUpdate-saveMessageToDBLOG', data: email });
     } catch (err) {
       process.send({
-        event: 'BeforeUpdate-saveMessageToDBLOG', error: {
+        event: 'BeforeUpdate-saveMessageToDBLOG',
+        error: {
           name: e.name,
           message: e.message,
           stacktrace: e.stack
@@ -177,17 +174,18 @@ module.exports.init = async (sequelize, opts) => {
       email.bodyAsText = email.bodyAsText.replace(/(?:\u00a0|\u200C)/g, '');
       email.bodyAsHtml = null;
 
-      await collection.put(email.emailId,
-        {
-          unread: email.unread,
-          folderId: email.folderId,
-          path: email.path
-        }
-      );
+      await collection.put(email.emailId, {
+        unread: email.unread,
+        folderId: email.folderId,
+        path: email.path
+      });
 
       return email;
     } catch (err) {
-      process.send({ event: 'BeforeUpsert-saveMessageToDBLOG', error: err.message });
+      process.send({
+        event: 'BeforeUpsert-saveMessageToDBLOG',
+        error: err.message
+      });
       throw err;
     }
   });
@@ -196,17 +194,24 @@ module.exports.init = async (sequelize, opts) => {
     try {
       const asyncArr = [];
       const drive = store.getDrive();
+      
       process.send({ event: 'beforeDestroyEmail', email });
 
-      asyncArr.push(collection.del(email.emailId));
-      asyncArr.push(drive.unlink(email.path));
+      await collection.del(email.emailId);
+      await drive.unlink(email.path);
 
-      asyncArr.push(
-        File.destroy({
-          where: { emailId: email.emailId },
-          individualHooks: true
-        })
-      );
+      const attachments = JSON.parse(email.attachments);
+
+      if(attachments && attachments.length) {
+        for(file of attachments) {
+          asyncArr.push(
+            File.destroy({
+              where: { path: file.path },
+              individualHooks: true
+            })
+          );
+        }
+      }
 
       const result = await Promise.all(asyncArr);
     } catch (err) {

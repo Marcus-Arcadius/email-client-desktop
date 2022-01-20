@@ -16,16 +16,21 @@ export default {
 
   module: {
     rules: [
-      // {
-      //   test: /\.tsx?$/,
-      //   exclude: /node_modules/,
-      //   use: {
-      //     loader: 'babel-loader',
-      //     options: {
-      //       cacheDirectory: true
-      //     }
-      //   }
-      // }
+      {
+        test: /\.tsx?$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            cacheDirectory: true
+          }
+        }
+      },
+      {
+        test: /\.mjs?$/,
+        include: /node_modules/,
+        type: 'javascript/auto'
+      }
     ]
   },
 
@@ -39,7 +44,7 @@ export default {
    * Determine the array of extensions that should be used to resolve modules.
    */
   resolve: {
-    extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
+    extensions: ['.js', '.jsx', '.json', '.ts', '.tsx', '.mjs'],
     modules: [path.join(__dirname, '..', 'app'), 'node_modules']
   },
 
